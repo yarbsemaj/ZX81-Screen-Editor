@@ -5,6 +5,7 @@ import { calculateCharForPixelDrawing, downLoadBlob } from "./utils";
 import Button from "../Button/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faRotateLeft, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import Modal from "../Modal/Modal";
 
 interface ScreenEditorProps {}
 
@@ -22,6 +23,8 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [selectedChar, setSelectedChar] = useState<number>(0);
   const [selectedMode, setSelectedMode] = useState<PaintMode>("char");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const canvasCTXRef = useRef<CanvasRenderingContext2D | null>(null);
   const screenStateRef = useRef<Uint8Array>(
     window.localStorage.getItem("screenState")
@@ -90,7 +93,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const open = () => {
     const fileInput = document.createElement("input");
     fileInput.type = "file";
-    fileInput.accept = ".zss";
+    fileInput.accept = ".zss,.asm,.txt,.bin";
     fileInput.click();
     fileInput.onchange = () => {
       const file = fileInput.files?.[0];
@@ -100,17 +103,42 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       reader.onload = (e) => {
         const result = e.target?.result;
         if (result && result instanceof ArrayBuffer) {
-          const array = new Uint8Array(result);
+          let array = new Uint8Array(SCREEN_WIDTH * SCREEN_HEIGHT);
+          if (result.byteLength === SCREEN_WIDTH * SCREEN_HEIGHT) {
+            // Valid screen state file
+            array = new Uint8Array(result);
+          } else {
+            //Are we loading an ASM exported file?
+            const text = new TextDecoder().decode(result);
+            const cleanedText = text
+              .replaceAll("\r", "") // Remove carriage returns
+              .replaceAll("\n", "") // Remove new lines
+              .replaceAll("	.byte	$76", "") // Remove line starters
+              .replaceAll("$", "") // Remove dollar signs
+              .substring(1); // Remove leading comma
+
+            //Convert to byte array
+            const byteArray = cleanedText.split(",").map((s) => {
+              const int = parseInt(s, 16);
+              if (int > 96) {
+                return int - 64;
+              }
+              return int;
+            });
+            if (byteArray.length === SCREEN_WIDTH * SCREEN_HEIGHT) {
+              array = new Uint8Array(byteArray);
+            } else {
+              setError(
+                "Invalid file format detected, please select a valid screen state file or exported ASM file.",
+              );
+              return;
+            }
+          }
           screenStateRef.current = array;
           redrawScreen();
-          document.body.removeChild(fileInput);
+          persistState();
+          pushToUndoBuffer();
         }
-      };
-      reader.onabort = () => {
-        document.body.removeChild(fileInput);
-      };
-      reader.onerror = () => {
-        document.body.removeChild(fileInput);
       };
     };
   };
@@ -337,7 +365,65 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
             Export as ASM
           </Button>
         </div>
+        <div className="flex gap-2 w-full">
+          <Button className="w-full" onClick={() => setIsHelpOpen(true)}>
+            Help
+          </Button>
+        </div>
       </div>
+      <Modal
+        isOpen={error !== null}
+        onClose={() => setError(null)}
+        title="Oops! An error occurred"
+      >
+        <div>{error}</div>
+      </Modal>
+      <Modal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        title="Help"
+      >
+        <div>
+          <p className="mb-2 font-semibold">
+            This tool allows you to create and edit artwork for display on the
+            ZX81 computer.
+          </p>
+          <ul className="list-disc list-inside mb-2">
+            <li>
+              Select characters from the character picker on the right and then
+              click and drag draw on the screen.
+            </li>
+            <li>Use the "Painting Mode" to draw using the block character.</li>
+            <li>
+              Your creations are automatically saved in your browser's local
+              storage, or you can save and load then to files using the buttons
+              below the editor window.
+            </li>
+            <li>
+              Export your creations as PNG images or ASM code for use in your
+              projects.
+            </li>
+          </ul>
+          <p className="flex gap-4">
+            <a
+              className="underline"
+              target="_blank"
+              href="https://github.com/yarbsemaj/ZX81-Screen-Editor"
+              rel="noreferrer"
+            >
+              Github
+            </a>
+            <a
+              className="underline"
+              target="_blank"
+              href="https://www.yarbsemaj.com"
+              rel="noreferrer"
+            >
+              Author
+            </a>
+          </p>
+        </div>
+      </Modal>
     </div>
   );
 };
