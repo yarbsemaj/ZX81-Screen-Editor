@@ -228,6 +228,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
 
     // Initialize undo buffer with the current state
     pushToUndoBuffer();
+    redrawScreen();
 
     document.onkeydown = (e) => {
       if (e.ctrlKey && e.key === "z") {
