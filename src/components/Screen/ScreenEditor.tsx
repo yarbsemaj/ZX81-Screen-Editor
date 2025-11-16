@@ -391,7 +391,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           <ul className="list-disc list-inside mb-2">
             <li>
               Select characters from the character picker on the right and then
-              click and drag draw on the screen.
+              click and drag to draw on the screen.
             </li>
             <li>Use the "Painting Mode" to draw using the block character.</li>
             <li>
