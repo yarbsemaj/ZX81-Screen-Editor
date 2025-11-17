@@ -17,6 +17,9 @@ const BitmapCharMap = {
   71: { tl: false, tr: false, bl: false, br: true }, // '▗'
 } as { [key: number]: { tl: boolean; tr: boolean; bl: boolean; br: boolean } };
 
+const printableCharString =
+  '"£$:?()><=+-*/;,.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
 export const getBitmapCharCode = (
   tl: boolean,
   tr: boolean,
@@ -76,4 +79,17 @@ export const downLoadBlob = (blob: Blob, filename: string) => {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+};
+
+export const keyboardEventToChar = (e: KeyboardEvent): number | null => {
+  const key = e.key;
+  if (key.length > 1) return null; // Not a single character
+
+  if (key === " ") return 0; // Space character
+
+  const charIndex = printableCharString.indexOf(key.toUpperCase());
+  if (charIndex !== -1) {
+    return charIndex + 11; // Offset to match ZX81 character codes
+  }
+  return null;
 };

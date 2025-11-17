@@ -1,32 +1,56 @@
 import charSet from "../../assets/charSet.png";
-import type { PaintMode } from "../Screen/ScreenEditor";
+import type { PaintMode, PalletteMode } from "../Screen/ScreenEditor";
+import charTool from "../../assets/tools/char.png";
+import pencilTool from "../../assets/tools/pencil.png";
+import textTool from "../../assets/tools/text.png";
+
+// PaletteButton component
+const ToolButton = ({
+  selected,
+  onClick,
+  children,
+  className,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children?: React.ReactNode;
+  className?: string;
+}) => (
+  <button
+    className={`w-9 h-9 cursor-pointer hover:border-green-300 border-2 ${selected ? "border-green-400" : "border-black"} ${className || ""}`}
+    onClick={onClick}
+  >
+    {children}
+  </button>
+);
 
 export const CharPicker = ({
   onSelectChar,
   selectedChar,
   onSelectMode,
   selectedMode,
+  onSelectPallette,
+  selectedPallette,
 }: {
   onSelectChar: (charCode: number) => void;
   selectedChar: number;
   onSelectMode: (mode: PaintMode) => void;
   selectedMode: PaintMode;
+  onSelectPallette: (pallette: PalletteMode) => void;
+  selectedPallette: PalletteMode;
 }) => {
   const charClickHandler = (charCode: number) => {
     onSelectChar(charCode);
-    onSelectMode("char");
+    onSelectMode("character");
   };
   return (
-    <div className="w-fit flex flex-col gap-4">
-      <div>
-        <h1 className="font-mono text-3xl font-bold text-center w-full">ZX81 Screen Editor</h1>
-      </div>
+    <div className="w-fit flex flex-col gap-2">
       <div>
         <div className="grid grid-cols-8 w-fit gap-0.5">
           {Array.from({ length: 128 }).map((_, i) => {
             const charCode = i;
             const isSelected =
-              charCode === selectedChar && selectedMode === "char";
+              charCode === selectedChar && selectedMode === "character";
             return (
               <div
                 className={`w-9 h-9 min-w-9 min-h-9 border-2 cursor-pointer hover:border-green-300 ${isSelected ? "border-green-400" : "border-gray-700"}`}
@@ -47,17 +71,65 @@ export const CharPicker = ({
         </div>
       </div>
       <div>
-        <div className="w-full text-center font-mono text-lg font-semibold">
-          Painting Mode
+        <div className="font-mono text-lg text-center font-semibold">
+          {selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1)} Tool
         </div>
-        <div className="flex gap-0.5 w-full justify-center">
-          <button
-            className={`w-9 h-9 cursor-pointer bg-black hover:border-green-300 border-2 ${selectedMode === "black" ? "border-green-400" : "border-black"}`}
-            onClick={() => onSelectMode("black")}
+        <div className="flex gap-1 w-full justify-center">
+          <ToolButton
+            selected={selectedMode === "character"}
+            onClick={() => onSelectMode("character")}
+          >
+            <img
+              src={charTool}
+              alt="Character Tool"
+              className="w-8 h-8 m-auto image"
+              style={{ imageRendering: "pixelated" }}
+            />
+          </ToolButton>
+          <ToolButton
+            selected={selectedMode === "text"}
+            onClick={() => onSelectMode("text")}
+          >
+            <img
+              src={textTool}
+              alt="Text Tool"
+              className="w-8 h-8 m-auto image"
+              style={{ imageRendering: "pixelated" }}
+            />
+          </ToolButton>
+          <ToolButton
+            selected={selectedMode === "pencil"}
+            onClick={() => onSelectMode("pencil")}
+          >
+            <img
+              src={pencilTool}
+              alt="Pencil Tool"
+              className="w-8 h-8 m-auto image"
+              style={{ imageRendering: "pixelated" }}
+            />
+          </ToolButton>
+        </div>
+      </div>
+      <div
+        className={`${selectedMode !== "character" ? "" : "opacity-50 pointer-events-none"}`}
+      >
+        <div className="font-mono text-lg text-center font-semibold">
+          Pallette
+        </div>
+        <div className={`flex gap-1 w-full justify-center`}>
+          <ToolButton
+            className="bg-black"
+            selected={
+              selectedPallette === "black" && selectedMode !== "character"
+            }
+            onClick={() => onSelectPallette("black")}
           />
-          <button
-            className={`w-9 h-9 cursor-pointer bg-white hover:border-green-300 border-2 ${selectedMode === "white" ? "border-green-400" : "border-black"}`}
-            onClick={() => onSelectMode("white")}
+          <ToolButton
+            className="bg-white"
+            selected={
+              selectedPallette === "white" && selectedMode !== "character"
+            }
+            onClick={() => onSelectPallette("white")}
           />
         </div>
       </div>

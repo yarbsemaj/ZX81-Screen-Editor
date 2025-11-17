@@ -1,15 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CharPicker } from "../CharPicker/CharPicker";
 import charSet from "../../assets/charSet.png";
-import { calculateCharForPixelDrawing, downLoadBlob } from "./utils";
+import {
+  calculateCharForPixelDrawing,
+  downLoadBlob,
+  keyboardEventToChar,
+} from "./utils";
 import Button from "../Button/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faRotateLeft, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import Modal from "../Modal/Modal";
+import HelpModal from "../Modal/HelpModal";
+import initialScreenState from "../../assets/initialScreenState.json";
 
 interface ScreenEditorProps {}
 
-export type PaintMode = "black" | "white" | "char";
+export type PaintMode = "pencil" | "character" | "text";
+export type PalletteMode = "black" | "white";
 
 const SCREEN_SCALE = 1; // Scale factor for the screen display
 const RENDERED_SCREEN_SCALE = 2; // Scale factor for the rendered screen image
@@ -21,7 +28,9 @@ const SCREEN_WIDTH_PIXELS = SCREEN_WIDTH * CHAR_SIZE * SCREEN_SCALE;
 
 const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [selectedChar, setSelectedChar] = useState<number>(0);
-  const [selectedMode, setSelectedMode] = useState<PaintMode>("char");
+  const [selectedMode, setSelectedMode] = useState<PaintMode>("character");
+  const [selectedPallette, setSelectedPallette] =
+    useState<PalletteMode>("black");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
@@ -31,11 +40,12 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       ? new Uint8Array(
           JSON.parse(window.localStorage.getItem("screenState") as string),
         )
-      : new Uint8Array(SCREEN_WIDTH * SCREEN_HEIGHT),
+      : new Uint8Array(initialScreenState),
   ); // Empty screen state
 
   const screenStateUndoBufferRef = useRef<Uint8Array[] | null>([]);
   const screenStateRedoBufferRef = useRef<Uint8Array[] | null>([]);
+  const charPositionsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const charSetImage = new Image();
   charSetImage.src = charSet;
@@ -203,6 +213,20 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         CHAR_SIZE * SCREEN_SCALE,
       );
     }
+
+    if (selectedMode === "text") {
+      //Draw text cursor
+      const cursorX = charPositionsRef.current.x;
+      const cursorY = charPositionsRef.current.y;
+      ctx.strokeStyle = "#7bf1a8";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        cursorX * CHAR_SIZE * SCREEN_SCALE,
+        cursorY * CHAR_SIZE * SCREEN_SCALE,
+        CHAR_SIZE * SCREEN_SCALE,
+        CHAR_SIZE * SCREEN_SCALE,
+      );
+    }
   };
 
   const pushToUndoBuffer = () => {
@@ -229,17 +253,49 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     // Initialize undo buffer with the current state
     pushToUndoBuffer();
     redrawScreen();
+  }, []);
 
+  useEffect(() => {
     document.onkeydown = (e) => {
       if (e.ctrlKey && e.key === "z") {
         undo();
+        return;
+      }
+      if (e.ctrlKey && e.key === "y") {
+        redo();
+        return;
+      }
+
+      if (selectedMode === "text") {
+        let charCode = keyboardEventToChar(e);
+        if (charCode !== null) {
+          //Save current state to undo buffer
+          pushToUndoBuffer();
+          const charX = charPositionsRef.current.x;
+          const charY = charPositionsRef.current.y;
+          const charIndex = charY * SCREEN_WIDTH + charX;
+          if (selectedPallette === "black") {
+            charCode += 64;
+          }
+          screenStateRef.current[charIndex] = charCode;
+          //Move cursor
+          if (charX + 1 < SCREEN_WIDTH) {
+            charPositionsRef.current.x += 1;
+          } else if (charY + 1 < SCREEN_HEIGHT) {
+            charPositionsRef.current.x = 0;
+            charPositionsRef.current.y += 1;
+          }
+          persistState();
+          redrawScreen();
+          e.preventDefault();
+        }
       }
     };
 
     return () => {
       document.onkeydown = null;
     };
-  }, []);
+  }, [selectedMode, selectedPallette]);
 
   useEffect(() => {
     let isMouseDown = false;
@@ -284,23 +340,19 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       const quadrantY = Math.floor(
         (y % (CHAR_SIZE * SCREEN_SCALE)) / ((CHAR_SIZE * SCREEN_SCALE) / 2),
       );
-      if (selectedMode === "char") {
+      if (selectedMode === "character") {
         // Draw character at the clicked position
         screenStateRef.current[charIndex] = selectedChar;
-      } else if (selectedMode === "black") {
+      } else if (selectedMode === "pencil") {
         screenStateRef.current[charIndex] = calculateCharForPixelDrawing(
           quadrantX,
           quadrantY,
           screenStateRef.current[charIndex],
-          false,
+          selectedPallette === "white",
         );
-      } else if (selectedMode === "white") {
-        screenStateRef.current[charIndex] = calculateCharForPixelDrawing(
-          quadrantX,
-          quadrantY,
-          screenStateRef.current[charIndex],
-          true,
-        );
+      } else if (selectedMode === "text") {
+        // Draw character at the clicked position and move cursor
+        charPositionsRef.current = { x: charX, y: charY };
       }
       // Save to localStorage
       persistState();
@@ -314,18 +366,19 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       canvas.onmouseleave = null;
       canvas.onclick = null;
     };
-  }, [selectedMode, selectedChar]);
+  }, [selectedMode, selectedChar, selectedPallette]);
 
   return (
     <div className="w-screen flex items-center flex-col gap-4 h-screen justify-center">
       <div className="flex flex-row gap-4">
-        <div className="boarder border-2 border-black">
+        <div className="boarder border-2 border-black w-fit h-fit shadow-[8px_8px_0_0_#000000]">
           <canvas
             style={{
               width: SCREEN_WIDTH_PIXELS * RENDERED_SCREEN_SCALE + "px",
               height: SCREEN_HEIGHT_PIXELS * RENDERED_SCREEN_SCALE + "px",
               imageRendering: "pixelated",
             }}
+            className={`${selectedMode === "character" ? "cursor-pointer" : selectedMode === "text" ? "cursor-text" : "cursor-crosshair"}`}
             ref={canvasRef}
             width={SCREEN_WIDTH_PIXELS}
             height={SCREEN_HEIGHT_PIXELS}
@@ -336,6 +389,8 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           selectedChar={selectedChar}
           onSelectMode={setSelectedMode}
           selectedMode={selectedMode}
+          onSelectPallette={setSelectedPallette}
+          selectedPallette={selectedPallette}
         />
       </div>
       <div className="flex gap-8 flex-row">
@@ -379,52 +434,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       >
         <div>{error}</div>
       </Modal>
-      <Modal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-        title="Help"
-      >
-        <div>
-          <p className="mb-2 font-semibold">
-            This tool allows you to create and edit artwork for display on the
-            ZX81 computer.
-          </p>
-          <ul className="list-disc list-inside mb-2">
-            <li>
-              Select characters from the character picker on the right and then
-              click and drag to draw on the screen.
-            </li>
-            <li>Use the "Painting Mode" to draw using the block character.</li>
-            <li>
-              Your creations are automatically saved in your browser's local
-              storage, or you can save and load then to files using the buttons
-              below the editor window.
-            </li>
-            <li>
-              Export your creations as PNG images or ASM code for use in your
-              projects.
-            </li>
-          </ul>
-          <p className="flex gap-4">
-            <a
-              className="underline"
-              target="_blank"
-              href="https://github.com/yarbsemaj/ZX81-Screen-Editor"
-              rel="noreferrer"
-            >
-              Github
-            </a>
-            <a
-              className="underline"
-              target="_blank"
-              href="https://www.yarbsemaj.com"
-              rel="noreferrer"
-            >
-              Author
-            </a>
-          </p>
-        </div>
-      </Modal>
+      <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
     </div>
   );
 };
