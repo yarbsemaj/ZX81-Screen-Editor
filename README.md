@@ -6,7 +6,7 @@ This tool allows you to create and edit artwork for display on the ZX81 computer
 
 ## Features
 *  Use the "Character Tool" to select characters from the character picker on the right and then click and drag to draw on the screen.
-*  Use the "Pencil Tool" to draw using the block character.
+*  Use the "Pencil Tool" to draw using the block characters.
 *  Use the "Text Tool" to add text to the screen using your keyboard.
 * Your creations are automatically saved in your browser's local storage, or you can save and load then to files using the buttons below the editor window.
 * Export your creations as PNG images or ASM code for use in your projects.

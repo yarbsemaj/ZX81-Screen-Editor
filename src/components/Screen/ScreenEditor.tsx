@@ -284,6 +284,10 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           } else if (charY + 1 < SCREEN_HEIGHT) {
             charPositionsRef.current.x = 0;
             charPositionsRef.current.y += 1;
+          } else {
+            //Wrap around to the beginning
+            charPositionsRef.current.x = 0;
+            charPositionsRef.current.y = 0;
           }
           persistState();
           redrawScreen();

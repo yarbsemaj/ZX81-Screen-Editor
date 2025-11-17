@@ -20,7 +20,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => (
           screen.
         </li>
         <li>
-          Use the &quot;Pencil Tool&quot; to draw using the block character.
+          Use the &quot;Pencil Tool&quot; to draw using the block characters.
         </li>
         <li>
           Use the &quot;Text Tool&quot; to add text to the screen using your
