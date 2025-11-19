@@ -5,6 +5,7 @@ import {
   calculateCharForPixelDrawing,
   downLoadBlob,
   keyboardEventToChar,
+  mouseEventToCoordinates,
 } from "./utils";
 import Button from "../Button/Button";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -15,16 +16,16 @@ import initialScreenState from "../../assets/initialScreenState.json";
 
 interface ScreenEditorProps {}
 
-export type PaintMode = "pencil" | "character" | "text";
+export type PaintMode = "pencil" | "character" | "text" | "select";
 export type PalletteMode = "black" | "white";
 
-const SCREEN_SCALE = 1; // Scale factor for the screen display
-const RENDERED_SCREEN_SCALE = 2; // Scale factor for the rendered screen image
-const CHAR_SIZE = 16; // Size of each character in pixels
-const SCREEN_WIDTH = 32; // Number of characters horizontally
-const SCREEN_HEIGHT = 24; // Number of characters vertically
-const SCREEN_HEIGHT_PIXELS = SCREEN_HEIGHT * CHAR_SIZE * SCREEN_SCALE;
-const SCREEN_WIDTH_PIXELS = SCREEN_WIDTH * CHAR_SIZE * SCREEN_SCALE;
+export const SCREEN_SCALE = 1; // Scale factor for the screen display
+export const RENDERED_SCREEN_SCALE = 2; // Scale factor for the rendered screen image
+export const CHAR_SIZE = 16; // Size of each character in pixels
+export const SCREEN_WIDTH = 32; // Number of characters horizontally
+export const SCREEN_HEIGHT = 24; // Number of characters vertically
+export const SCREEN_HEIGHT_PIXELS = SCREEN_HEIGHT * CHAR_SIZE * SCREEN_SCALE;
+export const SCREEN_WIDTH_PIXELS = SCREEN_WIDTH * CHAR_SIZE * SCREEN_SCALE;
 
 const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [selectedChar, setSelectedChar] = useState<number>(0);
@@ -46,6 +47,11 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const screenStateUndoBufferRef = useRef<Uint8Array[] | null>([]);
   const screenStateRedoBufferRef = useRef<Uint8Array[] | null>([]);
   const charPositionsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const selectToolRef = useRef<{
+    source: { x: number; y: number; width: number; height: number };
+    destination?: { x: number; y: number };
+    copyBuffer?: Uint8Array;
+  } | null>(null);
 
   const charSetImage = new Image();
   charSetImage.src = charSet;
@@ -226,6 +232,29 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         CHAR_SIZE * SCREEN_SCALE,
         CHAR_SIZE * SCREEN_SCALE,
       );
+    } else if (selectedMode === "select" && selectToolRef.current?.source) {
+      ctx.setLineDash([6]);
+      //Draw selection rectangle
+      const source = selectToolRef.current.source;
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        source.x * CHAR_SIZE * SCREEN_SCALE,
+        source.y * CHAR_SIZE * SCREEN_SCALE,
+        source.width * CHAR_SIZE * SCREEN_SCALE,
+        source.height * CHAR_SIZE * SCREEN_SCALE,
+      );
+      if (selectToolRef.current.destination) {
+        const dest = selectToolRef.current.destination;
+        ctx.strokeStyle = "#3b82f6";
+        ctx.strokeRect(
+          dest.x * CHAR_SIZE * SCREEN_SCALE,
+          dest.y * CHAR_SIZE * SCREEN_SCALE,
+          source.width * CHAR_SIZE * SCREEN_SCALE,
+          source.height * CHAR_SIZE * SCREEN_SCALE,
+        );
+      }
+      ctx.setLineDash([]);
     }
   };
 
@@ -293,6 +322,46 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           redrawScreen();
           e.preventDefault();
         }
+      } else if (selectedMode === "select") {
+        // Handle select mode key events here
+        if (e.key === "Escape") {
+          // Cancel selection
+          selectToolRef.current = null;
+          redrawScreen();
+          e.preventDefault();
+        } else if (
+          e.key === "Enter" &&
+          selectToolRef.current?.destination &&
+          selectToolRef.current?.copyBuffer
+        ) {
+          // Paste selection
+          pushToUndoBuffer();
+          const destX = selectToolRef.current.destination.x;
+          const destY = selectToolRef.current.destination.y;
+          const source = selectToolRef.current.source;
+          const copyBuffer = selectToolRef.current.copyBuffer;
+          for (let y = 0; y < source.height; y++) {
+            for (let x = 0; x < source.width; x++) {
+              const dstX = destX + x;
+              const dstY = destY + y;
+              if (
+                dstX < 0 ||
+                dstX >= SCREEN_WIDTH ||
+                dstY < 0 ||
+                dstY >= SCREEN_HEIGHT
+              ) {
+                continue; // Skip out-of-bounds
+              }
+              const dstIndex = dstY * SCREEN_WIDTH + dstX;
+              const bufferIndex = y * source.width + x;
+              //Move from copy buffer to screen state
+              screenStateRef.current[dstIndex] = copyBuffer[bufferIndex];
+            }
+          }
+          persistState();
+          redrawScreen();
+          e.preventDefault();
+        }
       }
     };
 
@@ -300,6 +369,12 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       document.onkeydown = null;
     };
   }, [selectedMode, selectedPallette]);
+
+  useEffect(() => {
+    if (selectedMode === "select") {
+      selectToolRef.current = null;
+    }
+  }, [selectedMode]);
 
   useEffect(() => {
     let isMouseDown = false;
@@ -314,36 +389,71 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     canvas.onmouseleave = () => {
       isMouseDown = false;
     };
-    canvas.onmousedown = () => {
+    canvas.onmousedown = (event: MouseEvent) => {
       // Save current state to undo buffer
-      pushToUndoBuffer();
       isMouseDown = true;
+      if (selectedMode === "select") {
+        //Start selection
+        const { charX, charY } = mouseEventToCoordinates(event, canvas);
+        if (!selectToolRef.current?.source) {
+          //Start selection
+          selectToolRef.current = {
+            source: { x: charX, y: charY, width: 0, height: 0 },
+          };
+        } else {
+          //Copy selection to the copy buffer
+          const copyBuffer = [];
+          const source = selectToolRef.current.source;
+          for (let y = 0; y < source.height; y++) {
+            for (let x = 0; x < source.width; x++) {
+              const srcX = source.x + x;
+              const srcY = source.y + y;
+
+              const srcIndex = srcY * SCREEN_WIDTH + srcX;
+              copyBuffer.push(screenStateRef.current[srcIndex]);
+            }
+          }
+          //Finish selection
+          selectToolRef.current.destination = { x: charX, y: charY };
+          selectToolRef.current.copyBuffer = new Uint8Array(copyBuffer);
+        }
+        redrawScreen();
+      } else {
+        persistState();
+      }
     };
 
     canvas.onmousemove = (e) => {
       if (isMouseDown) {
-        draw(e);
+        if (selectedMode === "select") {
+          const { charX, charY } = mouseEventToCoordinates(e, canvas);
+          if (selectToolRef.current) {
+            if (!selectToolRef.current?.destination) {
+              //Updating selection box
+              selectToolRef.current.source = {
+                ...selectToolRef.current.source,
+                width: charX - selectToolRef.current.source.x,
+                height: charY - selectToolRef.current.source.y,
+              };
+            } else {
+              //Move the destination
+              selectToolRef.current.destination = { x: charX, y: charY };
+            }
+          }
+          redrawScreen();
+        } else {
+          draw(e);
+        }
       }
     };
+
     canvas.onclick = (e) => {
       draw(e);
     };
 
     const draw = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / RENDERED_SCREEN_SCALE;
-      const y = (e.clientY - rect.top) / RENDERED_SCREEN_SCALE;
-
-      //Get the char and quadrant from x,y (For the Pixel Drawing Mode)
-      const charX = Math.floor(x / (CHAR_SIZE * SCREEN_SCALE));
-      const charY = Math.floor(y / (CHAR_SIZE * SCREEN_SCALE));
-      const charIndex = charY * 32 + charX;
-      const quadrantX = Math.floor(
-        (x % (CHAR_SIZE * SCREEN_SCALE)) / ((CHAR_SIZE * SCREEN_SCALE) / 2),
-      );
-      const quadrantY = Math.floor(
-        (y % (CHAR_SIZE * SCREEN_SCALE)) / ((CHAR_SIZE * SCREEN_SCALE) / 2),
-      );
+      const { charIndex, quadrantX, quadrantY, charX, charY } =
+        mouseEventToCoordinates(e, canvas);
       if (selectedMode === "character") {
         // Draw character at the clicked position
         screenStateRef.current[charIndex] = selectedChar;

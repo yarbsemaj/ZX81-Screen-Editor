@@ -13,7 +13,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => (
         This tool allows you to create and edit artwork for display on the ZX81
         computer.
       </p>
-      <ul className="list-disc list-inside mb-2">
+      <ul className="list-disc mb-2 pl-4">
         <li>
           Use the &quot;Character Tool&quot; to select characters from the
           character picker on the right and then click and drag to draw on the
@@ -25,6 +25,19 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => (
         <li>
           Use the &quot;Text Tool&quot; to add text to the screen using your
           keyboard.
+        </li>
+        <li>
+          Use the &quot;Select Tool&quot; to select, move, copy, and paste areas
+          of the screen.
+          <ul className="list-disc ml-4">
+            <li>First click and drag to select a source area.</li>
+            <li>Then click and drag again to move the destination area.</li>
+            <li>
+              Finally press the &quot;Enter&quot; key to copy the selected area
+              to the destination.
+            </li>
+            <li>You can press &quot;Esc&quot; to cancel the operation.</li>
+          </ul>
         </li>
         <li>
           Your creations are automatically saved in your browser&apos;s local
