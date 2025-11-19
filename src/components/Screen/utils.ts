@@ -1,3 +1,5 @@
+import { RENDERED_SCREEN_SCALE, CHAR_SIZE, SCREEN_SCALE } from "./ScreenEditor";
+
 const BitmapCharMap = {
   0: { tl: false, tr: false, bl: false, br: false }, // ' '
   1: { tl: true, tr: false, bl: false, br: false }, // '▘'
@@ -92,4 +94,23 @@ export const keyboardEventToChar = (e: KeyboardEvent): number | null => {
     return charIndex + 11; // Offset to match ZX81 character codes
   }
   return null;
+};
+
+export const mouseEventToCoordinates = (
+  event: MouseEvent,
+  element: HTMLElement,
+) => {
+  const rect = element.getBoundingClientRect();
+  const x = (event!.clientX - rect.left) / RENDERED_SCREEN_SCALE;
+  const y = (event!.clientY - rect.top) / RENDERED_SCREEN_SCALE;
+  const charX = Math.floor(x / (CHAR_SIZE * SCREEN_SCALE));
+  const charY = Math.floor(y / (CHAR_SIZE * SCREEN_SCALE));
+  const charIndex = charY * 32 + charX;
+  const quadrantX = Math.floor(
+    (x % (CHAR_SIZE * SCREEN_SCALE)) / ((CHAR_SIZE * SCREEN_SCALE) / 2),
+  );
+  const quadrantY = Math.floor(
+    (y % (CHAR_SIZE * SCREEN_SCALE)) / ((CHAR_SIZE * SCREEN_SCALE) / 2),
+  );
+  return { charIndex, quadrantX, quadrantY, charX, charY };
 };

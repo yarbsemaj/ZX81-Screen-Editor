@@ -3,6 +3,7 @@ import type { PaintMode, PalletteMode } from "../Screen/ScreenEditor";
 import charTool from "../../assets/tools/char.png";
 import pencilTool from "../../assets/tools/pencil.png";
 import textTool from "../../assets/tools/text.png";
+import selectTool from "../../assets/tools/select.png";
 
 // PaletteButton component
 const ToolButton = ({
@@ -23,6 +24,8 @@ const ToolButton = ({
     {children}
   </button>
 );
+
+const NoPalletteTools = ["character", "select"] as PaintMode[];
 
 export const CharPicker = ({
   onSelectChar,
@@ -108,10 +111,21 @@ export const CharPicker = ({
               style={{ imageRendering: "pixelated" }}
             />
           </ToolButton>
+          <ToolButton
+            selected={selectedMode === "select"}
+            onClick={() => onSelectMode("select")}
+          >
+            <img
+              src={selectTool}
+              alt="Select Tool"
+              className="w-8 h-8 m-auto image"
+              style={{ imageRendering: "pixelated" }}
+            />
+          </ToolButton>
         </div>
       </div>
       <div
-        className={`${selectedMode !== "character" ? "" : "opacity-50 pointer-events-none"}`}
+        className={`${NoPalletteTools.includes(selectedMode) ? "opacity-50 pointer-events-none" : ""}`}
       >
         <div className="font-mono text-lg text-center font-semibold">
           Pallette
@@ -120,14 +134,16 @@ export const CharPicker = ({
           <ToolButton
             className="bg-black"
             selected={
-              selectedPallette === "black" && selectedMode !== "character"
+              selectedPallette === "black" &&
+              !NoPalletteTools.includes(selectedMode)
             }
             onClick={() => onSelectPallette("black")}
           />
           <ToolButton
             className="bg-white"
             selected={
-              selectedPallette === "white" && selectedMode !== "character"
+              selectedPallette === "white" &&
+              !NoPalletteTools.includes(selectedMode)
             }
             onClick={() => onSelectPallette("white")}
           />
