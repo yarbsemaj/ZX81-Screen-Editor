@@ -232,7 +232,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         CHAR_SIZE * SCREEN_SCALE,
         CHAR_SIZE * SCREEN_SCALE,
       );
-    } else if (selectedMode === "select" && selectToolRef.current) {
+    } else if (selectedMode === "select" && selectToolRef.current?.source) {
       ctx.setLineDash([6]);
       //Draw selection rectangle
       const source = selectToolRef.current.source;
@@ -247,7 +247,6 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       if (selectToolRef.current.destination) {
         const dest = selectToolRef.current.destination;
         ctx.strokeStyle = "#3b82f6";
-        ctx.lineWidth = 2;
         ctx.strokeRect(
           dest.x * CHAR_SIZE * SCREEN_SCALE,
           dest.y * CHAR_SIZE * SCREEN_SCALE,
