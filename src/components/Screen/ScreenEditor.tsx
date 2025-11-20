@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
 import { CharPicker } from "../CharPicker/CharPicker";
 import charSet from "../../assets/charSet.png";
 import {
@@ -46,6 +46,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
 
   const screenStateUndoBufferRef = useRef<Uint8Array[] | null>([]);
   const screenStateRedoBufferRef = useRef<Uint8Array[] | null>([]);
+  const [_, forceUpdate] = useReducer((x) => x + 1, 0);
   const charPositionsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const selectToolRef = useRef<{
     source: { x: number; y: number; width: number; height: number };
@@ -150,10 +151,10 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
               return;
             }
           }
+          pushToUndoBuffer();
           screenStateRef.current = array;
           redrawScreen();
           persistState();
-          pushToUndoBuffer();
         }
       };
     };
@@ -170,6 +171,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         screenStateRef.current = previousState;
         persistState();
         redrawScreen();
+        forceUpdate();
       }
     }
   };
@@ -185,6 +187,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         screenStateRef.current = nextState;
         persistState();
         redrawScreen();
+        forceUpdate();
       }
     }
   };
@@ -270,6 +273,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     ) {
       screenStateUndoBufferRef.current.shift();
     }
+    forceUpdate();
   };
 
   useEffect(() => {
@@ -279,8 +283,6 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     if (!ctx) return;
     canvasCTXRef.current = ctx;
 
-    // Initialize undo buffer with the current state
-    pushToUndoBuffer();
     redrawScreen();
   }, []);
 
@@ -418,7 +420,8 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           selectToolRef.current.copyBuffer = new Uint8Array(copyBuffer);
         }
         redrawScreen();
-      } else {
+      } else if (selectedMode !== "text") {
+        pushToUndoBuffer();
         persistState();
       }
     };
@@ -520,10 +523,18 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           </Button>
         </div>
         <div className="flex gap-2 w-full">
-          <Button className="w-full" onClick={undo}>
+          <Button
+            className="w-full"
+            onClick={undo}
+            disabled={screenStateUndoBufferRef.current?.length === 0}
+          >
             <FontAwesomeIcon icon={faRotateLeft} />
           </Button>
-          <Button className="w-full" onClick={redo}>
+          <Button
+            className="w-full"
+            onClick={redo}
+            disabled={screenStateRedoBufferRef.current?.length === 0}
+          >
             <FontAwesomeIcon icon={faRotateRight} />
           </Button>
         </div>
