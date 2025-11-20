@@ -20,7 +20,6 @@ export type PaintMode = "pencil" | "character" | "text" | "select";
 export type PalletteMode = "black" | "white";
 
 export const SCREEN_SCALE = 1; // Scale factor for the screen display
-export const RENDERED_SCREEN_SCALE = 2; // Scale factor for the rendered screen image
 export const CHAR_SIZE = 16; // Size of each character in pixels
 export const SCREEN_WIDTH = 32; // Number of characters horizontally
 export const SCREEN_HEIGHT = 24; // Number of characters vertically
@@ -28,7 +27,7 @@ export const SCREEN_HEIGHT_PIXELS = SCREEN_HEIGHT * CHAR_SIZE * SCREEN_SCALE;
 export const SCREEN_WIDTH_PIXELS = SCREEN_WIDTH * CHAR_SIZE * SCREEN_SCALE;
 
 const ScreenEditor: React.FC<ScreenEditorProps> = () => {
-  const [selectedChar, setSelectedChar] = useState<number>(0);
+  const [selectedChar, setSelectedChar] = useState<number>(1);
   const [selectedMode, setSelectedMode] = useState<PaintMode>("character");
   const [selectedPallette, setSelectedPallette] =
     useState<PalletteMode>("black");
@@ -36,6 +35,11 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [error, setError] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const canvasCTXRef = useRef<CanvasRenderingContext2D | null>(null);
+  const [renderedScreenScale, setRenderedScreenScale] = useState<number>(
+    window.innerWidth < 1536
+      ? (window.innerWidth - 40) / SCREEN_WIDTH_PIXELS
+      : 2,
+  );
   const screenStateRef = useRef<Uint8Array>(
     window.localStorage.getItem("screenState")
       ? new Uint8Array(
@@ -59,6 +63,21 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   charSetImage.onload = () => {
     redrawScreen();
   };
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1536) {
+        setRenderedScreenScale((window.innerWidth - 40) / SCREEN_WIDTH_PIXELS);
+        return;
+      } else {
+        setRenderedScreenScale(2);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const clearScreen = () => {
     pushToUndoBuffer();
@@ -385,18 +404,20 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     const ctx = canvasCTXRef.current;
     if (!ctx) return;
 
-    canvas.onmouseup = () => {
+    const onmouseup = () => {
       isMouseDown = false;
     };
-    canvas.onmouseleave = () => {
-      isMouseDown = false;
-    };
-    canvas.onmousedown = (event: MouseEvent) => {
+
+    const onmousedown = (event: MouseEvent | TouchEvent) => {
       // Save current state to undo buffer
       isMouseDown = true;
       if (selectedMode === "select") {
         //Start selection
-        const { charX, charY } = mouseEventToCoordinates(event, canvas);
+        const { charX, charY } = mouseEventToCoordinates(
+          event,
+          canvas,
+          renderedScreenScale,
+        );
         if (!selectToolRef.current?.source) {
           //Start selection
           selectToolRef.current = {
@@ -426,10 +447,14 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       }
     };
 
-    canvas.onmousemove = (e) => {
+    const onmousemove = (e: MouseEvent | TouchEvent) => {
       if (isMouseDown) {
         if (selectedMode === "select") {
-          const { charX, charY } = mouseEventToCoordinates(e, canvas);
+          const { charX, charY } = mouseEventToCoordinates(
+            e,
+            canvas,
+            renderedScreenScale,
+          );
           if (selectToolRef.current) {
             if (!selectToolRef.current?.destination) {
               //Updating selection box
@@ -450,13 +475,24 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       }
     };
 
+    canvas.onmouseup = onmouseup;
+    canvas.onmouseleave = onmouseup;
+    canvas.ontouchend = onmouseup;
+    canvas.ontouchcancel = onmouseup;
+
+    canvas.onmousedown = onmousedown;
+    canvas.ontouchstart = onmousedown;
+
+    canvas.onmousemove = onmousemove;
+    canvas.ontouchmove = onmousemove;
+
     canvas.onclick = (e) => {
       draw(e);
     };
 
-    const draw = (e: MouseEvent) => {
+    const draw = (e: MouseEvent | TouchEvent) => {
       const { charIndex, quadrantX, quadrantY, charX, charY } =
-        mouseEventToCoordinates(e, canvas);
+        mouseEventToCoordinates(e, canvas, renderedScreenScale);
       if (selectedMode === "character") {
         // Draw character at the clicked position
         screenStateRef.current[charIndex] = selectedChar;
@@ -482,17 +518,21 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
       canvas.onmouseup = null;
       canvas.onmouseleave = null;
       canvas.onclick = null;
+      canvas.ontouchend = null;
+      canvas.ontouchcancel = null;
+      canvas.ontouchstart = null;
+      canvas.ontouchmove = null;
     };
-  }, [selectedMode, selectedChar, selectedPallette]);
+  }, [selectedMode, selectedChar, selectedPallette, renderedScreenScale]);
 
   return (
-    <div className="w-screen flex items-center flex-col gap-4 h-screen justify-center">
-      <div className="flex flex-row gap-4">
+    <div className="w-screen flex items-center flex-col gap-4 2xl:h-screen justify-center 2xl:p-0 p-4">
+      <div className="flex 2xl:flex-row flex-col gap-4">
         <div className="boarder border-2 border-black w-fit h-fit shadow-[8px_8px_0_0_#000000]">
           <canvas
             style={{
-              width: SCREEN_WIDTH_PIXELS * RENDERED_SCREEN_SCALE + "px",
-              height: SCREEN_HEIGHT_PIXELS * RENDERED_SCREEN_SCALE + "px",
+              width: SCREEN_WIDTH_PIXELS * renderedScreenScale + "px",
+              height: SCREEN_HEIGHT_PIXELS * renderedScreenScale + "px",
               imageRendering: "pixelated",
             }}
             className={`${selectedMode === "character" ? "cursor-pointer" : selectedMode === "text" ? "cursor-text" : "cursor-crosshair"}`}
@@ -510,7 +550,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           selectedPallette={selectedPallette}
         />
       </div>
-      <div className="flex gap-8 flex-row">
+      <div className="flex gap-8 2xl:flex-row flex-col">
         <div className="flex gap-2 w-full">
           <Button className="w-full" onClick={clearScreen}>
             New

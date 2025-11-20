@@ -1,4 +1,4 @@
-import { RENDERED_SCREEN_SCALE, CHAR_SIZE, SCREEN_SCALE } from "./ScreenEditor";
+import { CHAR_SIZE, SCREEN_SCALE } from "./ScreenEditor";
 
 const BitmapCharMap = {
   0: { tl: false, tr: false, bl: false, br: false }, // ' '
@@ -97,12 +97,15 @@ export const keyboardEventToChar = (e: KeyboardEvent): number | null => {
 };
 
 export const mouseEventToCoordinates = (
-  event: MouseEvent,
+  event: MouseEvent | TouchEvent,
   element: HTMLElement,
+  renderedScreenScale: number,
 ) => {
+  const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+  const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
   const rect = element.getBoundingClientRect();
-  const x = (event!.clientX - rect.left) / RENDERED_SCREEN_SCALE;
-  const y = (event!.clientY - rect.top) / RENDERED_SCREEN_SCALE;
+  const x = (clientX - rect.left) / renderedScreenScale;
+  const y = (clientY - rect.top) / renderedScreenScale;
   const charX = Math.floor(x / (CHAR_SIZE * SCREEN_SCALE));
   const charY = Math.floor(y / (CHAR_SIZE * SCREEN_SCALE));
   const charIndex = charY * 32 + charX;

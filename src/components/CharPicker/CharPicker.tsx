@@ -47,9 +47,9 @@ export const CharPicker = ({
     onSelectMode("character");
   };
   return (
-    <div className="w-fit flex flex-col gap-2">
+    <div className="2xl:w-fit flex flex-col gap-2 w-full ">
       <div>
-        <div className="grid grid-cols-8 w-fit gap-0.5">
+        <div className="2xl:grid 2xl:grid-cols-[repeat(8,36px)] flex flex-wrap gap-0.5 2xl:w-auto w-full justify-center">
           {Array.from({ length: 128 }).map((_, i) => {
             const charCode = i;
             const isSelected =
