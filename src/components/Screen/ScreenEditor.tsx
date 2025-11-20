@@ -535,7 +535,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
 
   return (
     <div className="w-screen flex items-center flex-col gap-4 2xl:h-screen justify-center 2xl:p-0 p-4">
-      <div className="flex items-center 2xl:flex-row flex-col gap-4">
+      <div className="flex 2xl:items-start items-center 2xl:flex-row flex-col gap-4">
         <div className="boarder border-2 border-black w-fit h-fit shadow-[8px_8px_0_0_#000000]">
           <canvas
             style={{
