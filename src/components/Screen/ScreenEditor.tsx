@@ -26,6 +26,10 @@ export const SCREEN_HEIGHT = 24; // Number of characters vertically
 export const SCREEN_HEIGHT_PIXELS = SCREEN_HEIGHT * CHAR_SIZE * SCREEN_SCALE;
 export const SCREEN_WIDTH_PIXELS = SCREEN_WIDTH * CHAR_SIZE * SCREEN_SCALE;
 
+function calculateRenderedScreenScale(windowWidth: number): number {
+  return windowWidth < 1536 ? (windowWidth - 40) / SCREEN_WIDTH_PIXELS : 2;
+}
+
 const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [selectedChar, setSelectedChar] = useState<number>(1);
   const [selectedMode, setSelectedMode] = useState<PaintMode>("character");
@@ -36,9 +40,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const canvasCTXRef = useRef<CanvasRenderingContext2D | null>(null);
   const [renderedScreenScale, setRenderedScreenScale] = useState<number>(
-    window.innerWidth < 1536
-      ? (window.innerWidth - 40) / SCREEN_WIDTH_PIXELS
-      : 2,
+    calculateRenderedScreenScale(window.innerWidth),
   );
   const screenStateRef = useRef<Uint8Array>(
     window.localStorage.getItem("screenState")
@@ -50,7 +52,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
 
   const screenStateUndoBufferRef = useRef<Uint8Array[] | null>([]);
   const screenStateRedoBufferRef = useRef<Uint8Array[] | null>([]);
-  const [_, forceUpdate] = useReducer((x) => x + 1, 0);
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const charPositionsRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const selectToolRef = useRef<{
     source: { x: number; y: number; width: number; height: number };
@@ -66,12 +68,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 1536) {
-        setRenderedScreenScale((window.innerWidth - 40) / SCREEN_WIDTH_PIXELS);
-        return;
-      } else {
-        setRenderedScreenScale(2);
-      }
+      setRenderedScreenScale(calculateRenderedScreenScale(window.innerWidth));
     };
     window.addEventListener("resize", handleResize);
     return () => {
@@ -527,7 +524,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
 
   return (
     <div className="w-screen flex items-center flex-col gap-4 2xl:h-screen justify-center 2xl:p-0 p-4">
-      <div className="flex 2xl:flex-row flex-col gap-4">
+      <div className="flex items-center 2xl:flex-row flex-col gap-4">
         <div className="boarder border-2 border-black w-fit h-fit shadow-[8px_8px_0_0_#000000]">
           <canvas
             style={{
