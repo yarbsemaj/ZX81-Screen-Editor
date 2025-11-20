@@ -20,7 +20,10 @@ const Button: React.FC<ButtonProps> = ({
         hover:bg-black hover:text-white
         active:shadow-none
         active:translate-x-1 active:translate-y-1
-        transition-all duration-100
+        transition-all duration-200
+        disabled:opacity-50 disabled:shadow-none 
+        disabled:cursor-not-allowed disabled:pointer-events-none 
+        disabled:translate-1
         ${className}
         `}
     {...props}
