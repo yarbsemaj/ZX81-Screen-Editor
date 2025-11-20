@@ -445,6 +445,8 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     };
 
     const onmousemove = (e: MouseEvent | TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
       if (isMouseDown) {
         if (selectedMode === "select") {
           const { charX, charY } = mouseEventToCoordinates(
