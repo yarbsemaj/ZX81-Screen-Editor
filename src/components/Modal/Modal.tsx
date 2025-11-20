@@ -23,7 +23,7 @@ const Modal: React.FC<ModalProps> = ({
       onClick={onClose}
     >
       <div
-        className={`bg-white text-black border-2 border-black shadow-[8px_8px_0_0_#000000] font-mono p-6 min-w-[320px] rounded-md relative max-w-[750px] ${className}`}
+        className={`bg-white text-black border-2 border-black shadow-[8px_8px_0_0_#000000] font-mono p-6 min-w-[320px] rounded-md relative max-w-[750px] max-h-[80vh] overflow-auto 2xl:mx-0 m-3 ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
