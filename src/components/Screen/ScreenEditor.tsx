@@ -346,38 +346,14 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           // Cancel selection
           selectToolRef.current = null;
           redrawScreen();
+          forceUpdate();
           e.preventDefault();
         } else if (
           e.key === "Enter" &&
           selectToolRef.current?.destination &&
           selectToolRef.current?.copyBuffer
         ) {
-          // Paste selection
-          pushToUndoBuffer();
-          const destX = selectToolRef.current.destination.x;
-          const destY = selectToolRef.current.destination.y;
-          const source = selectToolRef.current.source;
-          const copyBuffer = selectToolRef.current.copyBuffer;
-          for (let y = 0; y < source.height; y++) {
-            for (let x = 0; x < source.width; x++) {
-              const dstX = destX + x;
-              const dstY = destY + y;
-              if (
-                dstX < 0 ||
-                dstX >= SCREEN_WIDTH ||
-                dstY < 0 ||
-                dstY >= SCREEN_HEIGHT
-              ) {
-                continue; // Skip out-of-bounds
-              }
-              const dstIndex = dstY * SCREEN_WIDTH + dstX;
-              const bufferIndex = y * source.width + x;
-              //Move from copy buffer to screen state
-              screenStateRef.current[dstIndex] = copyBuffer[bufferIndex];
-            }
-          }
-          persistState();
-          redrawScreen();
+          pasteSelection();
           e.preventDefault();
         }
       }
@@ -388,10 +364,42 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     };
   }, [selectedMode, selectedPallette]);
 
-  useEffect(() => {
-    if (selectedMode === "select") {
-      selectToolRef.current = null;
+  const pasteSelection = () => {
+    if (
+      selectToolRef.current?.destination &&
+      selectToolRef.current?.copyBuffer
+    ) {
+      // Paste selection
+      pushToUndoBuffer();
+      const destX = selectToolRef.current.destination.x;
+      const destY = selectToolRef.current.destination.y;
+      const source = selectToolRef.current.source;
+      const copyBuffer = selectToolRef.current.copyBuffer;
+      for (let y = 0; y < source.height; y++) {
+        for (let x = 0; x < source.width; x++) {
+          const dstX = destX + x;
+          const dstY = destY + y;
+          if (
+            dstX < 0 ||
+            dstX >= SCREEN_WIDTH ||
+            dstY < 0 ||
+            dstY >= SCREEN_HEIGHT
+          ) {
+            continue; // Skip out-of-bounds
+          }
+          const dstIndex = dstY * SCREEN_WIDTH + dstX;
+          const bufferIndex = y * source.width + x;
+          //Move from copy buffer to screen state
+          screenStateRef.current[dstIndex] = copyBuffer[bufferIndex];
+        }
+      }
+      persistState();
+      redrawScreen();
     }
+  };
+
+  useEffect(() => {
+    selectToolRef.current = null;
   }, [selectedMode]);
 
   useEffect(() => {
@@ -436,6 +444,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           //Finish selection
           selectToolRef.current.destination = { x: charX, y: charY };
           selectToolRef.current.copyBuffer = new Uint8Array(copyBuffer);
+          forceUpdate();
         }
         redrawScreen();
       } else if (selectedMode !== "text") {
@@ -540,6 +549,16 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
             height={SCREEN_HEIGHT_PIXELS}
           />
         </div>
+        {selectedMode === "select" &&
+          selectToolRef.current?.destination?.x &&
+          selectToolRef.current?.destination?.y &&
+          selectToolRef.current?.copyBuffer && (
+            <div className="md:hidden flex flex-col gap-2 w-full">
+              <Button className="w-full" onClick={pasteSelection}>
+                Paste
+              </Button>
+            </div>
+          )}
         <CharPicker
           onSelectChar={setSelectedChar}
           selectedChar={selectedChar}

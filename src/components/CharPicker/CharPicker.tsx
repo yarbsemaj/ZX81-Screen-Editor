@@ -90,6 +90,7 @@ export const CharPicker = ({
             />
           </ToolButton>
           <ToolButton
+            className="md:block hidden"
             selected={selectedMode === "text"}
             onClick={() => onSelectMode("text")}
           >
@@ -112,6 +113,7 @@ export const CharPicker = ({
             />
           </ToolButton>
           <ToolButton
+            className="md:block"
             selected={selectedMode === "select"}
             onClick={() => onSelectMode("select")}
           >
