@@ -3,18 +3,25 @@ import { CharPicker } from "../CharPicker/CharPicker";
 import charSet from "../../assets/charSet.png";
 import {
   calculateCharForPixelDrawing,
-  downLoadBlob,
+  calculateRenderedScreenScale,
   keyboardEventToChar,
   mouseEventToCoordinates,
-} from "./utils";
+  persistState,
+  pushToUndoBuffer,
+} from "./utils/utils";
+import { redrawScreen as redrawScreenUtil } from "./utils/redrawScreen";
+import { pasteSelection as pasteSelectionUtil } from "./utils/pasteSelection";
 import Button from "../Button/Button";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRotateLeft, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import Modal from "../Modal/Modal";
 import HelpModal from "../Modal/HelpModal";
 import initialScreenState from "../../assets/initialScreenState.json";
-
-interface ScreenEditorProps {}
+import {
+  saveScreenState,
+  exportScreenAsPNG,
+  exportScreenAsASM,
+  openScreenFile,
+} from "./utils/file";
+import { MenuBar } from "../MenuBar/MenuBar";
 
 export type PaintMode = "pencil" | "character" | "text" | "select";
 export type PalletteMode = "black" | "white";
@@ -26,11 +33,7 @@ export const SCREEN_HEIGHT = 24; // Number of characters vertically
 export const SCREEN_HEIGHT_PIXELS = SCREEN_HEIGHT * CHAR_SIZE * SCREEN_SCALE;
 export const SCREEN_WIDTH_PIXELS = SCREEN_WIDTH * CHAR_SIZE * SCREEN_SCALE;
 
-function calculateRenderedScreenScale(windowWidth: number): number {
-  return windowWidth < 1536 ? (windowWidth - 40) / SCREEN_WIDTH_PIXELS : 2;
-}
-
-const ScreenEditor: React.FC<ScreenEditorProps> = () => {
+const ScreenEditor: React.FC = () => {
   const [selectedChar, setSelectedChar] = useState<number>(1);
   const [selectedMode, setSelectedMode] = useState<PaintMode>("character");
   const [selectedPallette, setSelectedPallette] =
@@ -42,6 +45,36 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
   const [renderedScreenScale, setRenderedScreenScale] = useState<number>(
     calculateRenderedScreenScale(window.innerWidth),
   );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setRenderedScreenScale(calculateRenderedScreenScale(window.innerWidth));
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+  const charSetImage = React.useMemo(() => {
+    const img = new window.Image();
+    img.src = charSet;
+    img.onload = () => {
+      redrawScreen();
+    };
+    return img;
+  }, []);
+
+  const clearScreen = () => {
+    pushToUndoBuffer(
+      screenStateUndoBufferRef,
+      screenStateRedoBufferRef,
+      screenStateRef,
+      forceUpdate,
+    );
+    screenStateRef.current.fill(0);
+    persistState(screenStateRef);
+    redrawScreen();
+  };
   const screenStateRef = useRef<Uint8Array>(
     window.localStorage.getItem("screenState")
       ? new Uint8Array(
@@ -60,121 +93,21 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     copyBuffer?: Uint8Array;
   } | null>(null);
 
-  const charSetImage = new Image();
-  charSetImage.src = charSet;
-  charSetImage.onload = () => {
-    redrawScreen();
-  };
-
-  useEffect(() => {
-    const handleResize = () => {
-      setRenderedScreenScale(calculateRenderedScreenScale(window.innerWidth));
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
-  const clearScreen = () => {
-    pushToUndoBuffer();
-    screenStateRef.current.fill(0);
-    persistState();
-    redrawScreen();
-  };
-
-  const save = () => {
-    // Implement save functionality
-    const blob = new Blob([new Uint8Array(screenStateRef.current)], {
-      type: "application/octet-stream",
-    });
-    downLoadBlob(blob, "screenState.zss");
-  };
-
-  const exportAsPNG = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.toBlob((blob) => {
-      if (blob) {
-        downLoadBlob(blob, "screen.png");
-      }
-    });
-  };
-
-  const exportAsASM = () => {
-    // Implement export as ASM functionality
-    let asmOutput = "";
-    for (let i = 0; i < SCREEN_HEIGHT; i++) {
-      let asmLine = "	.byte	$76,"; // ASM line start (byte array then new line)
-      for (let j = 0; j < SCREEN_WIDTH; j++) {
-        const charIndex = i * SCREEN_WIDTH + j;
-        let charCode = screenStateRef.current[charIndex];
-        // Convert charCode to ASM representation
-        if (charCode > 32) {
-          charCode += 64;
-        }
-        asmLine += `$${charCode.toString(16).padStart(2, "0")},`;
-      }
-      asmLine = asmLine.slice(0, -1); // Remove trailing comma
-      asmOutput += asmLine + "\n"; // Add new line
-    }
-    asmOutput += "	.byte	$76"; // End of screen data
-    const blob = new Blob([asmOutput], { type: "text/plain" });
-    downLoadBlob(blob, "screen.asm");
-  };
-
-  const open = () => {
-    const fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = ".zss,.asm,.txt,.bin";
-    fileInput.click();
-    fileInput.onchange = () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.readAsArrayBuffer(file);
-      reader.onload = (e) => {
-        const result = e.target?.result;
-        if (result && result instanceof ArrayBuffer) {
-          let array = new Uint8Array(SCREEN_WIDTH * SCREEN_HEIGHT);
-          if (result.byteLength === SCREEN_WIDTH * SCREEN_HEIGHT) {
-            // Valid screen state file
-            array = new Uint8Array(result);
-          } else {
-            //Are we loading an ASM exported file?
-            const text = new TextDecoder().decode(result);
-            const cleanedText = text
-              .replaceAll("\r", "") // Remove carriage returns
-              .replaceAll("\n", "") // Remove new lines
-              .replaceAll("	.byte	$76", "") // Remove line starters
-              .replaceAll("$", "") // Remove dollar signs
-              .substring(1); // Remove leading comma
-
-            //Convert to byte array
-            const byteArray = cleanedText.split(",").map((s) => {
-              const int = parseInt(s, 16);
-              if (int > 96) {
-                return int - 64;
-              }
-              return int;
-            });
-            if (byteArray.length === SCREEN_WIDTH * SCREEN_HEIGHT) {
-              array = new Uint8Array(byteArray);
-            } else {
-              setError(
-                "Invalid file format detected, please select a valid screen state file or exported ASM file.",
-              );
-              return;
-            }
-          }
-          pushToUndoBuffer();
-          screenStateRef.current = array;
-          redrawScreen();
-          persistState();
-        }
-      };
-    };
-  };
+  const save = () => saveScreenState(screenStateRef);
+  const exportAsPNG = () =>
+    exportScreenAsPNG(canvasRef as React.RefObject<HTMLCanvasElement>);
+  const exportAsASM = () => exportScreenAsASM(screenStateRef);
+  const open = () =>
+    openScreenFile(
+      setError,
+      screenStateRef,
+      forceUpdate,
+      pushToUndoBuffer,
+      redrawScreen,
+      persistState,
+      screenStateUndoBufferRef,
+      screenStateRedoBufferRef,
+    );
 
   const undo = () => {
     const undoBuffer = screenStateUndoBufferRef.current;
@@ -185,7 +118,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           new Uint8Array([...screenStateRef.current]),
         );
         screenStateRef.current = previousState;
-        persistState();
+        persistState(screenStateRef);
         redrawScreen();
         forceUpdate();
       }
@@ -201,96 +134,23 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           new Uint8Array([...screenStateRef.current]),
         );
         screenStateRef.current = nextState;
-        persistState();
+        persistState(screenStateRef);
         redrawScreen();
         forceUpdate();
       }
     }
   };
 
-  const persistState = () => {
-    window.localStorage.setItem(
-      "screenState",
-      JSON.stringify(Array.from(screenStateRef.current)),
+  const redrawScreen = () =>
+    redrawScreenUtil(
+      canvasCTXRef.current,
+      canvasRef.current,
+      screenStateRef.current,
+      charSetImage,
+      selectedMode,
+      charPositionsRef.current,
+      selectToolRef.current,
     );
-  };
-
-  const redrawScreen = () => {
-    const ctx = canvasCTXRef.current;
-    const canvas = canvasRef.current;
-    const screenState = screenStateRef.current;
-    if (!ctx || !canvas) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    //Redraw the screen based on screenState
-    for (let i = 0; i < screenState.length; i++) {
-      const char = screenState[i];
-      const x = i % SCREEN_WIDTH;
-      const y = Math.floor(i / SCREEN_WIDTH);
-      ctx.drawImage(
-        charSetImage,
-        (char % CHAR_SIZE) * CHAR_SIZE,
-        Math.floor(char / CHAR_SIZE) * CHAR_SIZE,
-        CHAR_SIZE,
-        CHAR_SIZE,
-        x * CHAR_SIZE * SCREEN_SCALE,
-        y * CHAR_SIZE * SCREEN_SCALE,
-        CHAR_SIZE * SCREEN_SCALE,
-        CHAR_SIZE * SCREEN_SCALE,
-      );
-    }
-
-    if (selectedMode === "text") {
-      //Draw text cursor
-      const cursorX = charPositionsRef.current.x;
-      const cursorY = charPositionsRef.current.y;
-      ctx.strokeStyle = "#7bf1a8";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        cursorX * CHAR_SIZE * SCREEN_SCALE,
-        cursorY * CHAR_SIZE * SCREEN_SCALE,
-        CHAR_SIZE * SCREEN_SCALE,
-        CHAR_SIZE * SCREEN_SCALE,
-      );
-    } else if (selectedMode === "select" && selectToolRef.current?.source) {
-      ctx.setLineDash([6]);
-      //Draw selection rectangle
-      const source = selectToolRef.current.source;
-      ctx.strokeStyle = "#f59e0b";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        source.x * CHAR_SIZE * SCREEN_SCALE,
-        source.y * CHAR_SIZE * SCREEN_SCALE,
-        source.width * CHAR_SIZE * SCREEN_SCALE,
-        source.height * CHAR_SIZE * SCREEN_SCALE,
-      );
-      if (selectToolRef.current.destination) {
-        const dest = selectToolRef.current.destination;
-        ctx.strokeStyle = "#3b82f6";
-        ctx.strokeRect(
-          dest.x * CHAR_SIZE * SCREEN_SCALE,
-          dest.y * CHAR_SIZE * SCREEN_SCALE,
-          source.width * CHAR_SIZE * SCREEN_SCALE,
-          source.height * CHAR_SIZE * SCREEN_SCALE,
-        );
-      }
-      ctx.setLineDash([]);
-    }
-  };
-
-  const pushToUndoBuffer = () => {
-    screenStateUndoBufferRef.current?.push(
-      new Uint8Array([...screenStateRef.current]),
-    );
-    screenStateRedoBufferRef.current = []; // Clear redo buffer on new action
-    // Limit undo buffer size
-    if (
-      screenStateUndoBufferRef.current &&
-      screenStateUndoBufferRef.current.length > 50
-    ) {
-      screenStateUndoBufferRef.current.shift();
-    }
-    forceUpdate();
-  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -317,7 +177,12 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         let charCode = keyboardEventToChar(e);
         if (charCode !== null) {
           //Save current state to undo buffer
-          pushToUndoBuffer();
+          pushToUndoBuffer(
+            screenStateUndoBufferRef,
+            screenStateRedoBufferRef,
+            screenStateRef,
+            forceUpdate,
+          );
           const charX = charPositionsRef.current.x;
           const charY = charPositionsRef.current.y;
           const charIndex = charY * SCREEN_WIDTH + charX;
@@ -336,7 +201,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
             charPositionsRef.current.x = 0;
             charPositionsRef.current.y = 0;
           }
-          persistState();
+          persistState(screenStateRef);
           redrawScreen();
           e.preventDefault();
         }
@@ -364,42 +229,19 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
     };
   }, [selectedMode, selectedPallette]);
 
-  const pasteSelection = () => {
-    if (
-      selectToolRef.current?.destination &&
-      selectToolRef.current?.copyBuffer
-    ) {
-      // Paste selection
-      pushToUndoBuffer();
-      const destX = selectToolRef.current.destination.x;
-      const destY = selectToolRef.current.destination.y;
-      const source = selectToolRef.current.source;
-      const copyBuffer = selectToolRef.current.copyBuffer;
-      for (let y = 0; y < source.height; y++) {
-        for (let x = 0; x < source.width; x++) {
-          const dstX = destX + x;
-          const dstY = destY + y;
-          if (
-            dstX < 0 ||
-            dstX >= SCREEN_WIDTH ||
-            dstY < 0 ||
-            dstY >= SCREEN_HEIGHT
-          ) {
-            continue; // Skip out-of-bounds
-          }
-          const dstIndex = dstY * SCREEN_WIDTH + dstX;
-          const bufferIndex = y * source.width + x;
-          //Move from copy buffer to screen state
-          screenStateRef.current[dstIndex] = copyBuffer[bufferIndex];
-        }
-      }
-      persistState();
-      redrawScreen();
-    }
-  };
+  const pasteSelection = () =>
+    pasteSelectionUtil(
+      selectToolRef,
+      screenStateUndoBufferRef,
+      screenStateRedoBufferRef,
+      screenStateRef,
+      forceUpdate,
+      redrawScreen,
+    );
 
   useEffect(() => {
     selectToolRef.current = null;
+    redrawScreen();
   }, [selectedMode]);
 
   useEffect(() => {
@@ -448,8 +290,13 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         }
         redrawScreen();
       } else if (selectedMode !== "text") {
-        pushToUndoBuffer();
-        persistState();
+        pushToUndoBuffer(
+          screenStateUndoBufferRef,
+          screenStateRedoBufferRef,
+          screenStateRef,
+          forceUpdate,
+        );
+        persistState(screenStateRef);
       }
     };
 
@@ -516,7 +363,7 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
         charPositionsRef.current = { x: charX, y: charY };
       }
       // Save to localStorage
-      persistState();
+      persistState(screenStateRef);
       redrawScreen();
     };
 
@@ -550,15 +397,15 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           />
         </div>
         {selectedMode === "select" &&
-          selectToolRef.current?.destination?.x &&
-          selectToolRef.current?.destination?.y &&
-          selectToolRef.current?.copyBuffer && (
-            <div className="md:hidden flex flex-col gap-2 w-full">
-              <Button className="w-full" onClick={pasteSelection}>
-                Paste
-              </Button>
-            </div>
-          )}
+        selectToolRef.current?.destination?.x &&
+        selectToolRef.current?.destination?.y &&
+        selectToolRef.current?.copyBuffer ? (
+          <div className="md:hidden flex flex-col gap-2 w-full">
+            <Button className="w-full" onClick={pasteSelection}>
+              Paste
+            </Button>
+          </div>
+        ) : null}
         <CharPicker
           onSelectChar={setSelectedChar}
           selectedChar={selectedChar}
@@ -568,48 +415,18 @@ const ScreenEditor: React.FC<ScreenEditorProps> = () => {
           selectedPallette={selectedPallette}
         />
       </div>
-      <div className="flex gap-8 2xl:flex-row flex-col">
-        <div className="flex gap-2 w-full">
-          <Button className="w-full" onClick={clearScreen}>
-            New
-          </Button>
-          <Button className="w-full" onClick={open}>
-            Open
-          </Button>
-          <Button className="w-full" onClick={save}>
-            Save
-          </Button>
-        </div>
-        <div className="flex gap-2 w-full">
-          <Button
-            className="w-full"
-            onClick={undo}
-            disabled={screenStateUndoBufferRef.current?.length === 0}
-          >
-            <FontAwesomeIcon icon={faRotateLeft} />
-          </Button>
-          <Button
-            className="w-full"
-            onClick={redo}
-            disabled={screenStateRedoBufferRef.current?.length === 0}
-          >
-            <FontAwesomeIcon icon={faRotateRight} />
-          </Button>
-        </div>
-        <div className="flex gap-2 w-full">
-          <Button className="w-full text-nowrap" onClick={exportAsPNG}>
-            Export as PNG
-          </Button>
-          <Button className="w-full text-nowrap" onClick={exportAsASM}>
-            Export as ASM
-          </Button>
-        </div>
-        <div className="flex gap-2 w-full">
-          <Button className="w-full" onClick={() => setIsHelpOpen(true)}>
-            Help
-          </Button>
-        </div>
-      </div>
+      <MenuBar
+        clearScreen={clearScreen}
+        open={open}
+        save={save}
+        undo={undo}
+        redo={redo}
+        exportAsPNG={exportAsPNG}
+        exportAsASM={exportAsASM}
+        undoEnable={!!screenStateUndoBufferRef.current?.length}
+        redoEnable={!!screenStateRedoBufferRef.current?.length}
+        help={() => setIsHelpOpen(true)}
+      />
       <Modal
         isOpen={error !== null}
         onClose={() => setError(null)}

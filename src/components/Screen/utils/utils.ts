@@ -1,4 +1,35 @@
-import { CHAR_SIZE, SCREEN_SCALE } from "./ScreenEditor";
+import { CHAR_SIZE, SCREEN_SCALE, SCREEN_WIDTH_PIXELS } from "../ScreenEditor";
+
+// Utility functions extracted from ScreenEditor.tsx
+export function calculateRenderedScreenScale(windowWidth: number): number {
+  return windowWidth < 1536 ? (windowWidth - 40) / SCREEN_WIDTH_PIXELS : 2;
+}
+
+export function persistState(screenStateRef: React.RefObject<Uint8Array>) {
+  window.localStorage.setItem(
+    "screenState",
+    JSON.stringify(Array.from(screenStateRef.current!)),
+  );
+}
+
+export function pushToUndoBuffer(
+  screenStateUndoBufferRef: React.RefObject<Uint8Array[] | null>,
+  screenStateRedoBufferRef: React.RefObject<Uint8Array[] | null>,
+  screenStateRef: React.RefObject<Uint8Array>,
+  forceUpdate: () => void,
+) {
+  screenStateUndoBufferRef.current?.push(
+    new Uint8Array([...screenStateRef.current!]),
+  );
+  screenStateRedoBufferRef.current = [];
+  if (
+    screenStateUndoBufferRef.current &&
+    screenStateUndoBufferRef.current.length > 50
+  ) {
+    screenStateUndoBufferRef.current.shift();
+  }
+  forceUpdate();
+}
 
 const BitmapCharMap = {
   0: { tl: false, tr: false, bl: false, br: false }, // ' '

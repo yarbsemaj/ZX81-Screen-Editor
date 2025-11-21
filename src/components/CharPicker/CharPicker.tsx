@@ -48,8 +48,14 @@ export const CharPicker = ({
   };
   return (
     <div className="2xl:w-fit flex flex-col gap-2 w-full ">
-      <div>
-        <div className="2xl:grid 2xl:grid-cols-[repeat(8,36px)] flex flex-wrap gap-0.5 2xl:w-auto w-full justify-center">
+      <div className="md:order-first order-1">
+        <div
+          className={`2xl:grid 2xl:grid-cols-[repeat(8,36px)] flex flex-wrap gap-0.5 2xl:w-auto w-full justify-center
+            transition-all duration-300 overflow-hidden
+            ${selectedMode === "character" ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"}
+            md:max-h-none md:opacity-100
+          `}
+        >
           {Array.from({ length: 128 }).map((_, i) => {
             const charCode = i;
             const isSelected =
@@ -73,7 +79,7 @@ export const CharPicker = ({
           })}
         </div>
       </div>
-      <div>
+      <div className="order-first md:order-1">
         <div className="font-mono text-lg text-center font-semibold">
           {selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1)} Tool
         </div>
@@ -127,7 +133,7 @@ export const CharPicker = ({
         </div>
       </div>
       <div
-        className={`${NoPalletteTools.includes(selectedMode) ? "opacity-50 pointer-events-none" : ""}`}
+        className={`order-last ${NoPalletteTools.includes(selectedMode) ? "opacity-50 pointer-events-none" : ""}`}
       >
         <div className="font-mono text-lg text-center font-semibold">
           Pallette
